@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Trading Control Center</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="stylesheet" href="./styles.css?v=20260529-dark" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">AT</div>
+          <div>
+            <strong>AutoTrade</strong>
+            <span>Live Control</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <a class="nav-item is-active" href="#overview">
+            <i data-lucide="layout-dashboard"></i>
+            <span>ภาพรวม</span>
+          </a>
+          <a class="nav-item" href="#signals">
+            <i data-lucide="activity"></i>
+            <span>สัญญาณ</span>
+          </a>
+          <a class="nav-item" href="#risk">
+            <i data-lucide="shield-alert"></i>
+            <span>ความเสี่ยง</span>
+          </a>
+          <a class="nav-item" href="#orders">
+            <i data-lucide="list-checks"></i>
+            <span>คำสั่ง</span>
+          </a>
+          <a class="nav-item" href="#journal">
+            <i data-lucide="book-open"></i>
+            <span>บันทึก</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-status">
+          <span class="status-dot is-live"></span>
+          <div>
+            <strong>Paper Linked</strong>
+            <span>Alpaca sandbox</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Live Trading Control Center</p>
+            <h1>ห้องควบคุมเทรดจริง</h1>
+          </div>
+
+          <div class="topbar-actions">
+            <div class="market-clock" aria-live="polite">
+              <span id="clockEt">ET --:--:--</span>
+              <span id="clockLocal">BKK --:--:--</span>
+            </div>
+            <button class="icon-button" type="button" title="Refresh data" aria-label="Refresh data">
+              <i data-lucide="refresh-cw"></i>
+            </button>
+            <button class="icon-button has-badge" type="button" title="Alerts" aria-label="Alerts">
+              <i data-lucide="bell"></i>
+            </button>
+          </div>
+        </header>
+
+        <section class="control-strip" aria-label="Trading mode">
+          <div class="mode-control" role="group" aria-label="Live mode">
+            <button class="mode-option" type="button">OFF</button>
+            <button class="mode-option" type="button">Observe</button>
+            <button class="mode-option" type="button">Paper</button>
+            <button class="mode-option is-selected" type="button">Live Approval</button>
+            <button class="mode-option" type="button">Guarded Auto</button>
+          </div>
+
+          <div class="emergency-actions">
+            <button class="danger-button" type="button" id="killSwitch">
+              <i data-lucide="power"></i>
+              <span>Kill Switch</span>
+            </button>
+            <button class="neutral-button" type="button">
+              <i data-lucide="x-circle"></i>
+              <span>Close All</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="decision-board" aria-label="Trading decision dashboard">
+          <article class="decision-hero">
+            <div class="decision-status">
+              <span class="status-dot is-live"></span>
+              <span id="safetyState">พร้อมเทรดแบบอนุมัติก่อน</span>
+            </div>
+            <h2 id="decisionTitle">เทรดได้: ต้องอนุมัติทุกคำสั่ง</h2>
+            <p id="decisionSummary">
+              ข้อมูล, broker และ risk budget ยังอยู่ในกรอบ พร้อมใช้ Live Approval
+            </p>
+            <div class="decision-checks" id="decisionChecks">
+              <span><i data-lucide="check-circle-2"></i> Market data สด</span>
+              <span><i data-lucide="check-circle-2"></i> Broker ต่ออยู่</span>
+              <span><i data-lucide="check-circle-2"></i> News filter ผ่าน</span>
+              <span><i data-lucide="check-circle-2"></i> Daily loss ยังปลอดภัย</span>
+            </div>
+          </article>
+
+          <div class="decision-summary">
+            <article class="quick-card">
+              <span>Next action</span>
+              <strong id="nextAction">ตรวจ NVDA ก่อนส่ง bracket order</strong>
+            </article>
+            <article class="quick-card">
+              <span>Risk remaining</span>
+              <strong id="riskRemaining">76%</strong>
+              <div class="mini-meter"><span id="riskRemainingBar" style="width: 76%"></span></div>
+            </article>
+            <article class="quick-card">
+              <span>System health</span>
+              <strong id="systemHealth">Healthy</strong>
+              <small id="blockedTrades">1 trade blocked today</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="metrics-grid" id="overview" aria-label="Live metrics">
+          <article class="metric-card">
+            <span class="metric-label">Equity</span>
+            <strong>$52,840.22</strong>
+            <span class="metric-note positive">+1.48% today</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Buying Power</span>
+            <strong>$108,400</strong>
+            <span class="metric-note">Margin ready</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Daily PnL</span>
+            <strong class="positive">+$782.16</strong>
+            <span class="metric-note">Risk used 24%</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Data Latency</span>
+            <strong>184 ms</strong>
+            <span class="metric-note positive">Healthy</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Win Rate</span>
+            <strong>54.8%</strong>
+            <span class="metric-note">30-day paper</span>
+          </article>
+        </section>
+
+        <div class="dashboard-grid">
+          <div class="grid-col grid-col--main">
+            <section class="panel signal-panel" id="signals">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Signal Monitor</p>
+                  <h2>สัญญาณที่รออนุมัติ</h2>
+                </div>
+                <button class="small-button" type="button">
+                  <i data-lucide="sliders-horizontal"></i>
+                  <span>Filter</span>
+                </button>
+              </div>
+
+              <div class="signal-list">
+                <article class="signal-item is-priority">
+                  <div class="signal-main">
+                    <div>
+                      <span class="ticker">NVDA</span>
+                      <span class="tag buy">Long</span>
+                    </div>
+                    <strong>$1,126.40</strong>
+                  </div>
+                  <div class="signal-data">
+                    <span>Confidence <strong>73%</strong></span>
+                    <span>R:R <strong>1:2.4</strong></span>
+                    <span>ATR Stop <strong>$1,108.20</strong></span>
+                    <span>Target <strong>$1,170.00</strong></span>
+                  </div>
+                  <p>Momentum + volume anomaly ผ่านเกณฑ์ ข่าวล่าสุดเป็นกลาง และ spread อยู่ในกรอบ</p>
+                  <div class="approval-actions">
+                    <button class="approve-button" type="button">
+                      <i data-lucide="check"></i>
+                      <span>Approve</span>
+                    </button>
+                    <button class="reject-button" type="button">
+                      <i data-lucide="x"></i>
+                      <span>Reject</span>
+                    </button>
+                    <button class="icon-button" type="button" title="View detail" aria-label="View NVDA detail">
+                      <i data-lucide="eye"></i>
+                    </button>
+                  </div>
+                </article>
+
+                <article class="signal-item">
+                  <div class="signal-main">
+                    <div>
+                      <span class="ticker">MSFT</span>
+                      <span class="tag watch">Watch</span>
+                    </div>
+                    <strong>$486.18</strong>
+                  </div>
+                  <div class="signal-data">
+                    <span>Confidence <strong>61%</strong></span>
+                    <span>R:R <strong>1:1.6</strong></span>
+                    <span>Spread <strong>0.03%</strong></span>
+                    <span>News <strong>Clean</strong></span>
+                  </div>
+                  <p>รอ pullback เข้า VWAP ก่อนอนุมัติ ระบบยังไม่ส่งคำสั่ง</p>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel positions-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Positions</p>
+                  <h2>สถานะที่เปิดอยู่</h2>
+                </div>
+                <button class="small-button" type="button">
+                  <i data-lucide="download"></i>
+                  <span>Export</span>
+                </button>
+              </div>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Symbol</th>
+                      <th>Side</th>
+                      <th>Qty</th>
+                      <th>Entry</th>
+                      <th>Stop</th>
+                      <th>PnL</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td data-label="Symbol">AAPL</td>
+                      <td data-label="Side"><span class="tag buy">Long</span></td>
+                      <td data-label="Qty">42</td>
+                      <td data-label="Entry">$203.14</td>
+                      <td data-label="Stop">$198.80</td>
+                      <td data-label="PnL" class="positive">+$184.22</td>
+                      <td><button class="row-button" type="button">Exit</button></td>
+                    </tr>
+                    <tr>
+                      <td data-label="Symbol">TSLA</td>
+                      <td data-label="Side"><span class="tag sell">Short</span></td>
+                      <td data-label="Qty">18</td>
+                      <td data-label="Entry">$341.90</td>
+                      <td data-label="Stop">$349.10</td>
+                      <td data-label="PnL" class="negative">-$62.40</td>
+                      <td><button class="row-button" type="button">Exit</button></td>
+                    </tr>
+                    <tr>
+                      <td data-label="Symbol">SPY</td>
+                      <td data-label="Side"><span class="tag buy">Long</span></td>
+                      <td data-label="Qty">15</td>
+                      <td data-label="Entry">$612.22</td>
+                      <td data-label="Stop">$607.60</td>
+                      <td data-label="PnL" class="positive">+$96.15</td>
+                      <td><button class="row-button" type="button">Exit</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel journal-panel" id="journal">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Audit Journal</p>
+                  <h2>บันทึกเหตุผลการเทรด</h2>
+                </div>
+                <button class="small-button" type="button">
+                  <i data-lucide="plus"></i>
+                  <span>Note</span>
+                </button>
+              </div>
+
+              <div class="journal-list">
+                <article>
+                  <time>09:45</time>
+                  <div>
+                    <strong>Rejected SMCI</strong>
+                    <p>Spread 0.41% สูงกว่า limit 0.12% แม้ momentum score ผ่าน</p>
+                  </div>
+                </article>
+                <article>
+                  <time>09:42</time>
+                  <div>
+                    <strong>Entered AAPL</strong>
+                    <p>VWAP reclaim + volume 1.8x ค่าเฉลี่ย 20 วัน ตั้ง stop ด้วย ATR</p>
+                  </div>
+                </article>
+                <article>
+                  <time>09:38</time>
+                  <div>
+                    <strong>Risk profile updated</strong>
+                    <p>Daily loss budget เหลือ 76% หลังปิด ORCL ด้วยกำไร</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+          </div>
+
+          <div class="grid-col grid-col--side">
+            <section class="panel risk-panel" id="risk">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Risk Controls</p>
+                  <h2>กรอบความเสี่ยงวันนี้</h2>
+                </div>
+                <span class="health-pill">
+                  <span class="status-dot is-live"></span>
+                  Active
+                </span>
+              </div>
+
+              <div class="risk-meter">
+                <div class="risk-meter-top">
+                  <span>Daily loss limit</span>
+                  <strong>24%</strong>
+                </div>
+                <div class="meter-track">
+                  <span style="width: 24%"></span>
+                </div>
+              </div>
+
+              <div class="control-list">
+                <label class="toggle-row">
+                  <span>Human approval</span>
+                  <input type="checkbox" checked />
+                </label>
+                <label class="toggle-row">
+                  <span>Block stale data</span>
+                  <input type="checkbox" checked />
+                </label>
+                <label class="toggle-row">
+                  <span>Cooldown after 3 losses</span>
+                  <input type="checkbox" checked />
+                </label>
+                <label class="toggle-row">
+                  <span>Trade news spikes</span>
+                  <input type="checkbox" />
+                </label>
+              </div>
+
+              <div class="limit-grid">
+                <label>
+                  <span>Risk / trade</span>
+                  <input type="number" value="0.35" min="0" max="2" step="0.05" />
+                </label>
+                <label>
+                  <span>Max trades</span>
+                  <input type="number" value="8" min="1" max="40" />
+                </label>
+                <label>
+                  <span>Max ticker exposure</span>
+                  <input type="number" value="10" min="1" max="100" />
+                </label>
+                <label>
+                  <span>Max sector exposure</span>
+                  <input type="number" value="25" min="1" max="100" />
+                </label>
+              </div>
+            </section>
+
+            <section class="panel execution-panel" id="orders">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Execution</p>
+                  <h2>คำสั่งล่าสุด</h2>
+                </div>
+                <span class="health-pill">
+                  <span class="status-dot is-warn"></span>
+                  1 partial
+                </span>
+              </div>
+
+              <div class="order-timeline">
+                <article class="timeline-item">
+                  <span class="timeline-icon filled"><i data-lucide="check"></i></span>
+                  <div>
+                    <strong>AAPL limit buy filled</strong>
+                    <span>42 shares @ $203.14 · slippage 0.02%</span>
+                  </div>
+                  <time>09:42:11</time>
+                </article>
+                <article class="timeline-item">
+                  <span class="timeline-icon pending"><i data-lucide="clock-3"></i></span>
+                  <div>
+                    <strong>NVDA bracket staged</strong>
+                    <span>Awaiting approval · stop $1,108.20</span>
+                  </div>
+                  <time>09:44:32</time>
+                </article>
+                <article class="timeline-item">
+                  <span class="timeline-icon rejected"><i data-lucide="x"></i></span>
+                  <div>
+                    <strong>SMCI trade blocked</strong>
+                    <span>Spread exceeded threshold</span>
+                  </div>
+                  <time>09:45:03</time>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel news-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">News & Filings</p>
+                  <h2>ตัวกรองเหตุการณ์</h2>
+                </div>
+                <button class="small-button" type="button">
+                  <i data-lucide="search"></i>
+                  <span>Search</span>
+                </button>
+              </div>
+
+              <div class="news-list">
+                <article>
+                  <span class="tag warn">Earnings</span>
+                  <strong>NVDA earnings window in 2 days</strong>
+                  <p>ลดขนาด position อัตโนมัติถ้ามีคำสั่งข้ามคืน</p>
+                </article>
+                <article>
+                  <span class="tag info">SEC 8-K</span>
+                  <strong>MSFT filing parsed cleanly</strong>
+                  <p>ไม่มี keyword เสี่ยงใน material event ล่าสุด</p>
+                </article>
+                <article>
+                  <span class="tag alert">Macro</span>
+                  <strong>Fed speaker at 13:00 ET</strong>
+                  <p>ระบบจะลด max exposure ช่วง 12:45-13:15 ET</p>
+                </article>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="./app.js?v=20260529-dark"></script>
+  </body>
+</html>
