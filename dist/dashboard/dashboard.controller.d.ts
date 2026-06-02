@@ -11,4 +11,5 @@ export declare class DashboardController {
     rejectSignal(id: string): import("./dashboard.types").DashboardState;
     haltTrading(): import("./dashboard.types").DashboardState;
     resumeTrading(): import("./dashboard.types").DashboardState;
+    closeAll(): import("./dashboard.types").DashboardState;
 }

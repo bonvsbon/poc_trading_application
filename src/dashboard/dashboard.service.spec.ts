@@ -112,6 +112,13 @@ describe('DashboardService', () => {
     expect(() => service.approveSignal('sig-nvda-breakout')).not.toThrow();
   });
 
+  it('closeAll cancels pending signals and flattens positions', () => {
+    const state = service.closeAll();
+    expect(state.signals.find((s) => s.id === 'sig-nvda-breakout')?.status).toBe('rejected');
+    expect(state.positions).toHaveLength(0);
+    expect(state.journal[0].title).toBe('Close All triggered');
+  });
+
   it('logs the kill switch in the journal when halting', () => {
     const state = service.haltTrading();
     expect(state.journal[0].title).toBe('Kill Switch activated');

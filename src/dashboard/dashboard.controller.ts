@@ -43,4 +43,9 @@ export class DashboardController {
   resumeTrading() {
     return this.dashboardService.resumeTrading();
   }
+
+  @Post('close-all')
+  closeAll() {
+    return this.dashboardService.closeAll();
+  }
 }

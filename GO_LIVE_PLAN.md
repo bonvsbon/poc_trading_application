@@ -12,6 +12,9 @@
 
 ## ส่วนที่ 1 — แผน Go-Live (แบ่งเป็น Phase L)
 
+> สถานะ: **L1/L2 ทำโครงไว้แล้ว** (Alpaca adapter + ports + AlpacaModule, paper-safe by default)
+> เหลือ L3–L7 ก่อนจะใช้เงินจริงได้
+
 ### Phase L1 — Data layer (ข้อมูลจริง)
 - นิยาม port กลาง `MarketDataPort` (ต่อยอดจาก `MarketDataProvider` ปัจจุบัน)
   - `historicalBars(symbol, timeframe, from, to)` → ใช้ป้อน backtest

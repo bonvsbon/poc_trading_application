@@ -48,3 +48,6 @@
 - 2026-05-29: เพิ่ม HOW_TO_RUN.md (รันแอป/เทส/แบ็คเทส + โครงสร้างโปรเจกต์)
 - 2026-05-29: ปรับ design เป็นธีมมืด trading terminal + แก้บั๊ก layout (dashboard-grid เบียดกัน → จัดเป็น 2 คอลัมน์จริงด้วย .grid-col ไม่มีช่องว่างอีก); ยืนยันด้วย screenshot จริงในเบราว์เซอร์
 - 2026-05-29: เพิ่ม GO_LIVE_PLAN.md — แผนต่อ data จริง/เทรดจริง (Phase L1–L7) + research โบรกเกอร์ (Alpaca / IBKR / Settrade ไทย) พร้อมวิธีผูก/ติดตั้ง
+- 2026-06-02: Phase L1/L2 — ติดตั้ง `@alpacahq/alpaca-trade-api` + `@nestjs/config`; สร้าง `MarketDataPort`/`BrokerPort`; เขียน `AlpacaBrokerAdapter`/`AlpacaMarketDataAdapter` + `loadAlpacaConfig` (paper-safe by default); `AlpacaModule` lazy-load SDK; `AlpacaController` (status/account/positions, 503 ถ้าไม่มีคีย์) — 16 unit + 2 e2e เพิ่ม
+- 2026-06-02: Audit ระบบครบ — เพิ่ม `closeAll()` + endpoint, ทำ Kill Switch ↔ Resume toggle, ปุ่ม OFF/Live Approval/Refresh/Close All ทำงานจริง, ปุ่ม decorative ติด `data-decorative`, เพิ่ม notice toast; ยืนยันด้วย browser flow (halt → resume → close-all) — รวม 104 unit + 11 e2e เขียว, typecheck สะอาด, build ผ่าน
+- 2026-06-02: เพิ่ม AUDIT.md + อัปเดต HOW_TO_RUN.md (Alpaca section + new endpoints + structure)

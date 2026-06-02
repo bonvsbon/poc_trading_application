@@ -13,11 +13,13 @@ const dashboard_controller_1 = require("./dashboard/dashboard.controller");
 const dashboard_service_1 = require("./dashboard/dashboard.service");
 const engine_signal_service_1 = require("./dashboard/engine-signal.service");
 const market_data_provider_1 = require("./dashboard/market-data.provider");
+const alpaca_module_1 = require("./integrations/alpaca/alpaca.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
+        imports: [alpaca_module_1.AlpacaModule],
         controllers: [dashboard_controller_1.DashboardController],
         providers: [dashboard_service_1.DashboardService, clock_service_1.ClockService, engine_signal_service_1.EngineSignalService, market_data_provider_1.MarketDataProvider],
     })

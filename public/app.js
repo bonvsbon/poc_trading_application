@@ -95,6 +95,7 @@ const renderSummary = (summary) => {
   });
 
   document.body.classList.toggle("is-halted", summary.systemHealth === "Halted");
+  refreshKillSwitchUi();
 };
 
 const renderMetrics = (metrics) => {
@@ -353,61 +354,90 @@ const loadDashboardState = async () => {
   }
 };
 
-const wireModeControl = () => {
-  document.querySelectorAll(".mode-option").forEach((button) => {
-    button.addEventListener("click", () => {
-      document
-        .querySelectorAll(".mode-option")
-        .forEach((option) => option.classList.remove("is-selected"));
-      button.classList.add("is-selected");
-    });
-  });
+const showNotice = (message, tone = "info") => {
+  const notice = document.querySelector("#notice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.toggle("is-warn", tone === "warn");
+  notice.hidden = false;
+  clearTimeout(notice._timer);
+  notice._timer = window.setTimeout(() => {
+    notice.hidden = true;
+  }, 3500);
 };
 
-const wireTradingActions = () => {
+const isHalted = () => document.body.classList.contains("is-halted");
+
+const refreshKillSwitchUi = () => {
+  const killSwitch = document.querySelector("#killSwitch");
+  if (!killSwitch) return;
+  if (isHalted()) {
+    killSwitch.innerHTML = `${createIcon("play")}<span>Resume Trading</span>`;
+    killSwitch.classList.remove("danger-button");
+    killSwitch.classList.add("approve-button");
+  } else {
+    killSwitch.innerHTML = `${createIcon("power")}<span>Kill Switch</span>`;
+    killSwitch.classList.add("danger-button");
+    killSwitch.classList.remove("approve-button");
+  }
+  renderIcons();
+};
+
+const handleModeChange = async (mode) => {
+  document
+    .querySelectorAll(".mode-option")
+    .forEach((option) => option.classList.toggle("is-selected", option.dataset.mode === mode));
+
+  if (mode === "OFF") {
+    renderState(await postJson("/api/dashboard/halt"));
+  } else if (mode === "Live Approval") {
+    if (isHalted()) {
+      renderState(await postJson("/api/dashboard/resume"));
+    }
+  } else {
+    showNotice(`โหมด "${mode}" ยังไม่รองรับใน PoC (รองรับเฉพาะ OFF และ Live Approval)`, "warn");
+  }
+};
+
+const wireActions = () => {
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
+    if (!button) return;
 
-    const action = button.dataset.action;
-    const signalId = button.dataset.signalId;
+    const { action, signalId, mode } = button.dataset;
     button.disabled = true;
 
     try {
       if (action === "approve-signal" && signalId) {
         renderState(await postJson(`/api/dashboard/signals/${signalId}/approve`));
-      }
-
-      if (action === "reject-signal" && signalId) {
+      } else if (action === "reject-signal" && signalId) {
         renderState(await postJson(`/api/dashboard/signals/${signalId}/reject`));
+      } else if (action === "refresh") {
+        await loadDashboardState();
+        showNotice("รีเฟรชข้อมูลแล้ว");
+      } else if (action === "kill-switch") {
+        const path = isHalted() ? "/api/dashboard/resume" : "/api/dashboard/halt";
+        renderState(await postJson(path));
+        refreshKillSwitchUi();
+      } else if (action === "close-all") {
+        renderState(await postJson("/api/dashboard/close-all"));
+        showNotice("ยกเลิก pending signal และปิด position ทั้งหมดแล้ว", "warn");
+      } else if (action === "mode" && mode) {
+        await handleModeChange(mode);
       }
+    } catch (error) {
+      showNotice(error.message || "เกิดข้อผิดพลาด", "warn");
     } finally {
       button.disabled = false;
     }
   });
-
-  const killSwitch = document.querySelector("#killSwitch");
-  if (killSwitch) {
-    killSwitch.addEventListener("click", async () => {
-      killSwitch.disabled = true;
-      killSwitch.innerHTML = `${createIcon("octagon-alert")}<span>Trading Halted</span>`;
-
-      try {
-        renderState(await postJson("/api/dashboard/halt"));
-      } finally {
-        renderIcons();
-      }
-    });
-  }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   updateClocks();
   loadDashboardState();
-  wireModeControl();
-  wireTradingActions();
+  wireActions();
+  refreshKillSwitchUi();
 
   window.setInterval(updateClocks, 1000);
   window.setInterval(loadDashboardState, 15000);

@@ -36,6 +36,10 @@ npm run build && npm run start:prod   # build แล้วรันจาก dis
 | POST | `/api/dashboard/signals/:id/reject` | ปฏิเสธ signal |
 | POST | `/api/dashboard/halt` | Kill switch — หยุดรับคำสั่ง |
 | POST | `/api/dashboard/resume` | เปิดระบบกลับ |
+| POST | `/api/dashboard/close-all` | ยกเลิก pending signal ทั้งหมด + flatten positions |
+| GET  | `/api/alpaca/status` | สถานะการตั้งค่า Alpaca (`configured`, `paper`, `tradingEnabled`) |
+| GET  | `/api/alpaca/account` | account snapshot จาก Alpaca (503 ถ้ายังไม่ตั้งค่าคีย์) |
+| GET  | `/api/alpaca/positions` | positions จริงจาก Alpaca |
 
 ตัวอย่าง:
 ```bash
@@ -60,7 +64,35 @@ npm run typecheck # ตรวจชนิดด้วย tsc --noEmit (ไม่
 
 ---
 
-## 3) Backtest
+## 3) เชื่อม Alpaca (paper / live)
+
+**ขั้นต่ำสุด — แค่ดูสถานะ:** ไม่ต้องทำอะไร ระบบจะตอบ `/api/alpaca/status` ว่า `configured:false` และ
+`/api/alpaca/account` คืน 503 พร้อมข้อความอธิบาย
+
+**ต่อ Alpaca paper จริง:**
+1. สมัครบัญชี + สร้าง API key/secret ที่ [alpaca.markets](https://alpaca.markets) (เริ่มที่ paper account — ฟรี ไม่ต้องฝาก)
+2. ตั้ง env (แนะนำใช้ไฟล์ `.env` ที่ **ไม่ commit**):
+   ```
+   ALPACA_API_KEY_ID=...
+   ALPACA_API_SECRET_KEY=...
+   # ALPACA_LIVE=true              # ใส่เพื่อใช้ live api.alpaca.markets (default = paper)
+   # ALPACA_TRADING_ENABLED=true   # gate แยกอีกชั้นสำหรับการ submit order
+   ```
+3. รันแอป → เช็คว่าเชื่อมต่อสำเร็จ:
+   ```bash
+   curl http://localhost:3000/api/alpaca/status
+   curl http://localhost:3000/api/alpaca/account
+   ```
+
+**ความปลอดภัย by default:**
+- ไม่มี env → `configured:false`, ทุก endpoint Alpaca อื่นคืน 503 (ไม่ crash)
+- มี env แต่ไม่ตั้ง `ALPACA_LIVE=true` → ชี้ไปที่ **paper-api.alpaca.markets** เสมอ
+- ไม่มี `ALPACA_TRADING_ENABLED=true` → `submitBracketOrder()` โยน `TradingDisabledError` (อ่านบัญชี/positions ได้, ส่ง order ไม่ได้)
+- **ห้าม commit คีย์ลง repo** — เพิ่ม `.env` ใน `.gitignore`
+
+> หมายเหตุ: ยังไม่มี HTTP endpoint ที่ submit order ออกไปจริง (กันยิงพลาด) — จะเปิดเมื่อ Phase L4 ผูก approve flow → broker เสร็จ ดู [GO_LIVE_PLAN.md](GO_LIVE_PLAN.md)
+
+## 4) Backtest
 
 รันบนชุดข้อมูลตัวอย่างที่ให้มา:
 ```bash
@@ -107,10 +139,15 @@ src/
     execution/                ExecutionSimulator (fill/slippage) + order types
     portfolio/                Portfolio (cash/equity/PnL, long-only)
     backtest/                 data-loader, backtester, metrics, run.ts (CLI), fixtures/
-    integration/             adapter: StrategySignal -> dashboard signal
+    integration/              adapter: StrategySignal -> dashboard signal
+    ports/                    interfaces กลาง: MarketDataPort, BrokerPort
+  integrations/
+    alpaca/                   AlpacaModule + adapter (paper-safe, opt-in via env)
 public/                       frontend (vanilla JS) — escape HTML แล้ว (กัน XSS)
 test/                         e2e (supertest)
 TESTING_PROGRESS.md           สถานะแต่ละ phase ของแผนเทส/แบ็คเทส
+AUDIT.md                      ตรวจทุกฟังก์ชัน/เมนู/โมดูล (ใช้ได้จริง / decorative)
+GO_LIVE_PLAN.md               แผน Go-Live (Phase L1–L7) + broker research
 ```
 
 ### สถาปัตยกรรมโดยย่อ
