@@ -71,7 +71,7 @@ export class DashboardService {
     },
   ];
 
-  private readonly positions: Position[] = [
+  private positions: Position[] = [
     { symbol: 'AAPL', side: 'Long', quantity: 42, entry: '$203.14', stop: '$198.80', pnl: '+$184.22', pnlTone: 'positive' },
     { symbol: 'TSLA', side: 'Short', quantity: 18, entry: '$341.90', stop: '$349.10', pnl: '-$62.40', pnlTone: 'negative' },
     { symbol: 'SPY', side: 'Long', quantity: 15, entry: '$612.22', stop: '$607.60', pnl: '+$96.15', pnlTone: 'positive' },
@@ -199,6 +199,27 @@ export class DashboardService {
         time: this.clock.shortTime(),
         title: 'Kill Switch activated',
         detail: 'ระบบหยุดส่งคำสั่งใหม่ทั้งหมดจาก control center',
+      },
+      ...this.journal,
+    ];
+
+    return this.getState();
+  }
+
+  /** Cancel every pending signal and flatten every open position. */
+  closeAll(): DashboardState {
+    const pendingCount = this.signals.filter((s) => s.status === 'pending').length;
+    this.signals = this.signals.map((s) =>
+      s.status === 'pending' ? { ...s, status: 'rejected', priority: false } : s,
+    );
+    const positionsClosed = this.positions.length;
+    this.positions = [];
+
+    this.journal = [
+      {
+        time: this.clock.shortTime(),
+        title: 'Close All triggered',
+        detail: `ยกเลิก ${pendingCount} pending signal · ปิด ${positionsClosed} position`,
       },
       ...this.journal,
     ];

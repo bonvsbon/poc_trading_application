@@ -64,10 +64,28 @@ describe('Dashboard (e2e)', () => {
       .expect(409);
   });
 
+  it('GET /api/alpaca/status reports configured=false without env keys', async () => {
+    const res = await request(app.getHttpServer()).get('/api/alpaca/status').expect(200);
+    expect(res.body.configured).toBe(false);
+    expect(res.body.tradingEnabled).toBe(false);
+  });
+
+  it('GET /api/alpaca/account returns 503 when Alpaca is not configured', async () => {
+    await request(app.getHttpServer()).get('/api/alpaca/account').expect(503);
+  });
+
   it('GET /api/dashboard/live-signals returns engine-derived signals', async () => {
     const res = await request(app.getHttpServer()).get('/api/dashboard/live-signals').expect(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body[0]).toMatchObject({ id: 'live-nvda', symbol: 'NVDA', side: 'Long' });
+  });
+
+  it('POST close-all flattens positions and cancels pending signals', async () => {
+    const res = await request(app.getHttpServer()).post('/api/dashboard/close-all').expect(201);
+    expect(res.body.positions).toHaveLength(0);
+    expect(res.body.signals.find((s: { id: string }) => s.id === 'sig-nvda-breakout').status).toBe(
+      'rejected',
+    );
   });
 
   it('POST resume re-enables approvals', async () => {
