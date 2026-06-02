@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Live Trading Control Center</title>
     <link rel="preconnect" href="https://unpkg.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260529-dark" />
+    <link rel="stylesheet" href="./styles.css?v=20260602-audit" />
   </head>
   <body>
     <div class="app-shell">
@@ -62,10 +62,10 @@
               <span id="clockEt">ET --:--:--</span>
               <span id="clockLocal">BKK --:--:--</span>
             </div>
-            <button class="icon-button" type="button" title="Refresh data" aria-label="Refresh data">
+            <button class="icon-button" type="button" title="Refresh data" aria-label="Refresh data" data-action="refresh">
               <i data-lucide="refresh-cw"></i>
             </button>
-            <button class="icon-button has-badge" type="button" title="Alerts" aria-label="Alerts">
+            <button class="icon-button has-badge" type="button" title="Alerts (decorative in PoC)" aria-label="Alerts" data-decorative="true">
               <i data-lucide="bell"></i>
             </button>
           </div>
@@ -73,23 +73,25 @@
 
         <section class="control-strip" aria-label="Trading mode">
           <div class="mode-control" role="group" aria-label="Live mode">
-            <button class="mode-option" type="button">OFF</button>
-            <button class="mode-option" type="button">Observe</button>
-            <button class="mode-option" type="button">Paper</button>
-            <button class="mode-option is-selected" type="button">Live Approval</button>
-            <button class="mode-option" type="button">Guarded Auto</button>
+            <button class="mode-option" type="button" data-action="mode" data-mode="OFF">OFF</button>
+            <button class="mode-option" type="button" data-action="mode" data-mode="Observe">Observe</button>
+            <button class="mode-option" type="button" data-action="mode" data-mode="Paper">Paper</button>
+            <button class="mode-option is-selected" type="button" data-action="mode" data-mode="Live Approval">Live Approval</button>
+            <button class="mode-option" type="button" data-action="mode" data-mode="Guarded Auto">Guarded Auto</button>
           </div>
 
           <div class="emergency-actions">
-            <button class="danger-button" type="button" id="killSwitch">
+            <button class="danger-button" type="button" id="killSwitch" data-action="kill-switch">
               <i data-lucide="power"></i>
               <span>Kill Switch</span>
             </button>
-            <button class="neutral-button" type="button">
+            <button class="neutral-button" type="button" data-action="close-all">
               <i data-lucide="x-circle"></i>
               <span>Close All</span>
             </button>
           </div>
+
+          <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
         </section>
 
         <section class="decision-board" aria-label="Trading decision dashboard">
@@ -454,6 +456,6 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="./app.js?v=20260529-dark"></script>
+    <script src="./app.js?v=20260602-audit"></script>
   </body>
 </html>

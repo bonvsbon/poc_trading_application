@@ -7,7 +7,7 @@ export declare class DashboardService {
     private readonly metrics;
     private readonly risk;
     private signals;
-    private readonly positions;
+    private positions;
     private orders;
     private readonly news;
     private journal;
@@ -16,6 +16,7 @@ export declare class DashboardService {
     approveSignal(id: string): DashboardState;
     rejectSignal(id: string): DashboardState;
     haltTrading(): DashboardState;
+    closeAll(): DashboardState;
     resumeTrading(): DashboardState;
     private updateSignalStatus;
     private findSignal;

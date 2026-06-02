@@ -44,6 +44,9 @@ let DashboardController = class DashboardController {
     resumeTrading() {
         return this.dashboardService.resumeTrading();
     }
+    closeAll() {
+        return this.dashboardService.closeAll();
+    }
 };
 exports.DashboardController = DashboardController;
 __decorate([
@@ -90,6 +93,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], DashboardController.prototype, "resumeTrading", null);
+__decorate([
+    (0, common_1.Post)('close-all'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "closeAll", null);
 exports.DashboardController = DashboardController = __decorate([
     (0, common_1.Controller)('dashboard'),
     __metadata("design:paramtypes", [dashboard_service_1.DashboardService,

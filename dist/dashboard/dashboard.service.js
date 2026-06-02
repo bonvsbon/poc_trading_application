@@ -186,6 +186,21 @@ let DashboardService = class DashboardService {
         ];
         return this.getState();
     }
+    closeAll() {
+        const pendingCount = this.signals.filter((s) => s.status === 'pending').length;
+        this.signals = this.signals.map((s) => s.status === 'pending' ? { ...s, status: 'rejected', priority: false } : s);
+        const positionsClosed = this.positions.length;
+        this.positions = [];
+        this.journal = [
+            {
+                time: this.clock.shortTime(),
+                title: 'Close All triggered',
+                detail: `ยกเลิก ${pendingCount} pending signal · ปิด ${positionsClosed} position`,
+            },
+            ...this.journal,
+        ];
+        return this.getState();
+    }
     resumeTrading() {
         this.tradingHalted = false;
         this.journal = [
