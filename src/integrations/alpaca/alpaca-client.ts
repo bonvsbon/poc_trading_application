@@ -12,6 +12,25 @@ export interface AlpacaSdkClient {
     symbol: string,
     options: AlpacaBarsOptions,
   ): AsyncIterable<AlpacaBarResponse>;
+  /** Latest executed trade for one symbol (real-time last price). */
+  getLatestTrade?(symbol: string): Promise<AlpacaLatestTradeResponse>;
+  /** Latest executed trade for many symbols, keyed by symbol (watchlist). */
+  getLatestTrades?(
+    symbols: string[],
+  ): Promise<Map<string, AlpacaLatestTradeResponse>>;
+  /** Latest crypto trade(s), keyed by symbol e.g. "BTC/USD". */
+  getLatestCryptoTrades?(
+    symbols: string[],
+  ): Promise<Map<string, AlpacaLatestTradeResponse>>;
+  /** Historical crypto bars, keyed by symbol. */
+  getCryptoBars?(
+    symbols: string[],
+    options: AlpacaCryptoBarsOptions,
+  ): Promise<Map<string, AlpacaCryptoBarResponse[]>>;
+  /** Tradable assets (us_equity / crypto) for the search/selector. */
+  getAssets?(options?: AlpacaAssetsQuery): Promise<AlpacaAssetResponse[]>;
+  /** Recent orders for monitoring. */
+  getOrders?(options?: AlpacaOrdersQuery): Promise<AlpacaOrderDetailResponse[]>;
 }
 
 export interface AlpacaAccountResponse {
@@ -32,22 +51,44 @@ export interface AlpacaPositionResponse {
   unrealized_pl: string;
 }
 
+/**
+ * Alpaca create-order payload. Supports both the existing bracket path (stocks)
+ * and a simple market/limit path (works for crypto, which has no bracket).
+ * Provide exactly one of `qty` or `notional`.
+ */
 export interface AlpacaCreateOrderRequest {
   symbol: string;
-  qty: number;
+  qty?: number;
+  /** Dollar amount instead of shares/units (fractional). */
+  notional?: number;
   side: 'buy' | 'sell';
   type: 'market' | 'limit';
-  time_in_force: 'day' | 'gtc';
+  time_in_force: 'day' | 'gtc' | 'ioc';
   limit_price?: number;
-  order_class: 'bracket';
-  stop_loss: { stop_price: number };
-  take_profit: { limit_price: number };
   client_order_id: string;
+  order_class?: 'bracket' | 'simple';
+  stop_loss?: { stop_price: number };
+  take_profit?: { limit_price: number };
 }
 
 export interface AlpacaOrderResponse {
   id: string;
   client_order_id: string;
+  status: string;
+  submitted_at: string;
+}
+
+/** Richer order shape for monitoring (GET /v2/orders). */
+export interface AlpacaOrderDetailResponse {
+  id: string;
+  client_order_id: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  type: string;
+  qty: string | null;
+  notional: string | null;
+  filled_qty: string | null;
+  filled_avg_price: string | null;
   status: string;
   submitted_at: string;
 }
@@ -59,6 +100,13 @@ export interface AlpacaBarsOptions {
   limit?: number;
 }
 
+export interface AlpacaCryptoBarsOptions {
+  timeframe: string;
+  start?: string;
+  end?: string;
+  limit?: number;
+}
+
 export interface AlpacaBarResponse {
   Timestamp: string;
   OpenPrice: number;
@@ -66,4 +114,43 @@ export interface AlpacaBarResponse {
   LowPrice: number;
   ClosePrice: number;
   Volume: number;
+}
+
+/** Crypto bars use Open/High/Low/Close (no "Price" suffix) per the SDK. */
+export interface AlpacaCryptoBarResponse {
+  Timestamp: string;
+  Open: number;
+  High: number;
+  Low: number;
+  Close: number;
+  Volume: number;
+}
+
+export interface AlpacaLatestTradeResponse {
+  /** Present on multi-symbol responses (getLatestTrades). */
+  Symbol?: string;
+  Timestamp: string;
+  Price: number;
+  Size?: number;
+}
+
+export interface AlpacaAssetsQuery {
+  asset_class?: string;
+  status?: string;
+}
+
+export interface AlpacaAssetResponse {
+  id: string;
+  class: string;
+  exchange: string;
+  symbol: string;
+  name: string;
+  status: string;
+  tradable: boolean;
+  fractionable: boolean;
+}
+
+export interface AlpacaOrdersQuery {
+  status?: 'open' | 'closed' | 'all';
+  limit?: number;
 }

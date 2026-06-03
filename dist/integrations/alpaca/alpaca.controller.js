@@ -15,12 +15,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AlpacaController = void 0;
 const common_1 = require("@nestjs/common");
 const alpaca_tokens_1 = require("./alpaca.tokens");
+const DEFAULT_WATCHLIST = ['AAPL', 'NVDA', 'TSLA'];
+const MAX_WATCHLIST = 20;
 let AlpacaController = class AlpacaController {
     config;
     broker;
-    constructor(config, broker) {
+    marketData;
+    constructor(config, broker, marketData) {
         this.config = config;
         this.broker = broker;
+        this.marketData = marketData;
     }
     status() {
         if (!this.config) {
@@ -38,11 +42,63 @@ let AlpacaController = class AlpacaController {
     async positions() {
         return await this.requireBroker().getPositions();
     }
+    async orders() {
+        const broker = this.requireBroker();
+        try {
+            return await broker.getOrders();
+        }
+        catch (error) {
+            const detail = error instanceof Error ? error.message : 'unknown error';
+            throw new common_1.BadGatewayException(`Failed to fetch orders from Alpaca: ${detail}`);
+        }
+    }
+    async assets(search, assetClass) {
+        const broker = this.requireBroker();
+        try {
+            return await broker.searchAssets({
+                search,
+                assetClass: assetClass || undefined,
+                limit: 25,
+            });
+        }
+        catch (error) {
+            const detail = error instanceof Error ? error.message : 'unknown error';
+            throw new common_1.BadGatewayException(`Failed to fetch assets from Alpaca: ${detail}`);
+        }
+    }
+    async prices(symbols) {
+        const market = this.requireMarketData();
+        const list = this.parseSymbols(symbols);
+        try {
+            const prices = market.latestPrices
+                ? await market.latestPrices(list)
+                : await Promise.all(list.map((s) => market.latestPrice(s)));
+            return { asOf: new Date().toISOString(), prices };
+        }
+        catch (error) {
+            const detail = error instanceof Error ? error.message : 'unknown error';
+            throw new common_1.BadGatewayException(`Failed to fetch prices from Alpaca: ${detail}`);
+        }
+    }
+    parseSymbols(raw) {
+        const parsed = (raw ?? '')
+            .split(',')
+            .map((s) => s.trim().toUpperCase())
+            .filter(Boolean);
+        const unique = [...new Set(parsed.length ? parsed : DEFAULT_WATCHLIST)];
+        return unique.slice(0, MAX_WATCHLIST);
+    }
     requireBroker() {
         if (!this.broker) {
             throw new common_1.ServiceUnavailableException('Alpaca is not configured. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in env.');
         }
         return this.broker;
+    }
+    requireMarketData() {
+        if (!this.marketData) {
+            throw new common_1.ServiceUnavailableException('Alpaca is not configured. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in env.');
+        }
+        return this.marketData;
     }
 };
 exports.AlpacaController = AlpacaController;
@@ -64,12 +120,35 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], AlpacaController.prototype, "positions", null);
+__decorate([
+    (0, common_1.Get)('orders'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AlpacaController.prototype, "orders", null);
+__decorate([
+    (0, common_1.Get)('assets'),
+    __param(0, (0, common_1.Query)('search')),
+    __param(1, (0, common_1.Query)('class')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], AlpacaController.prototype, "assets", null);
+__decorate([
+    (0, common_1.Get)('prices'),
+    __param(0, (0, common_1.Query)('symbols')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AlpacaController.prototype, "prices", null);
 exports.AlpacaController = AlpacaController = __decorate([
     (0, common_1.Controller)('alpaca'),
     __param(0, (0, common_1.Optional)()),
     __param(0, (0, common_1.Inject)(alpaca_tokens_1.ALPACA_CONFIG)),
     __param(1, (0, common_1.Optional)()),
     __param(1, (0, common_1.Inject)(alpaca_tokens_1.ALPACA_BROKER)),
-    __metadata("design:paramtypes", [Object, Object])
+    __param(2, (0, common_1.Optional)()),
+    __param(2, (0, common_1.Inject)(alpaca_tokens_1.ALPACA_MARKET_DATA)),
+    __metadata("design:paramtypes", [Object, Object, Object])
 ], AlpacaController);
 //# sourceMappingURL=alpaca.controller.js.map

@@ -69,28 +69,76 @@ npm run typecheck # ตรวจชนิดด้วย tsc --noEmit (ไม่
 **ขั้นต่ำสุด — แค่ดูสถานะ:** ไม่ต้องทำอะไร ระบบจะตอบ `/api/alpaca/status` ว่า `configured:false` และ
 `/api/alpaca/account` คืน 503 พร้อมข้อความอธิบาย
 
-**ต่อ Alpaca paper จริง:**
-1. สมัครบัญชี + สร้าง API key/secret ที่ [alpaca.markets](https://alpaca.markets) (เริ่มที่ paper account — ฟรี ไม่ต้องฝาก)
-2. ตั้ง env (แนะนำใช้ไฟล์ `.env` ที่ **ไม่ commit**):
+**ต่อ Alpaca paper จริง (วิธีขอ key):**
+1. สมัครบัญชีฟรีที่ [alpaca.markets](https://alpaca.markets) → ยืนยันอีเมล (paper account ไม่ต้องฝากเงิน)
+2. ล็อกอินเข้า [app.alpaca.markets](https://app.alpaca.markets) → มุมขวาบนสลับเป็น **"Paper Trading"**
+3. ที่หน้า Home แผง **"API Keys"** กด **"Generate New Keys"** → จะได้ `Key ID` กับ `Secret Key`
+   (Secret แสดงครั้งเดียว — คัดลอกเก็บทันที)
+4. สร้างไฟล์ `.env` จากเทมเพลต แล้วเติมคีย์:
+   ```bash
+   cp .env.example .env
+   # แก้ .env ใส่ ALPACA_API_KEY_ID และ ALPACA_API_SECRET_KEY
    ```
-   ALPACA_API_KEY_ID=...
-   ALPACA_API_SECRET_KEY=...
+   เนื้อหา `.env`:
+   ```
+   ALPACA_API_KEY_ID=PK............
+   ALPACA_API_SECRET_KEY=................
    # ALPACA_LIVE=true              # ใส่เพื่อใช้ live api.alpaca.markets (default = paper)
    # ALPACA_TRADING_ENABLED=true   # gate แยกอีกชั้นสำหรับการ submit order
    ```
-3. รันแอป → เช็คว่าเชื่อมต่อสำเร็จ:
+5. รันแอป (`npm run start:dev`) — `.env` จะถูกโหลดอัตโนมัติ (ผ่าน dotenv) → เช็คว่าเชื่อมต่อสำเร็จ:
    ```bash
-   curl http://localhost:3000/api/alpaca/status
+   curl http://localhost:3000/api/alpaca/status     # → {"configured":true,"paper":true,...}
+   curl "http://localhost:3000/api/alpaca/prices?symbols=AAPL,NVDA,TSLA"
    curl http://localhost:3000/api/alpaca/account
    ```
+
+**ดูราคา real-time บน dashboard:**
+- เปิด `http://localhost:3000/` → แผง **"ราคาเรียลไทม์ (Live Prices)"** ที่คอลัมน์ขวา
+  จะ poll ราคาทุก 5 วินาที พร้อมไฮไลต์ขึ้น/ลง (เขียว/แดง)
+- ยังไม่ใส่คีย์ → แผงจะขึ้น "ยังไม่ได้เชื่อม" และบอกให้ตั้ง `.env` (ไม่ crash)
+- เปลี่ยน watchlist ได้ที่ตัวแปร `WATCHLIST_SYMBOLS` ใน `public/app.js`
+
+> หมายเหตุเรื่องข้อมูล: บัญชีฟรีใช้ฟีด **IEX** — ราคาล่าสุดมาจาก trade ของ IEX (เพียงพอสำหรับ PoC)
+> นอกเวลาตลาด (US market ปิด) ราคาจะนิ่งที่ trade ล่าสุด ถือว่าปกติ
+
+### เทรด paper จริง (BTC) — ประเมิน → อนุมัติ+ใส่ตัวเลข → ส่งคำสั่ง → monitor
+
+flow นี้ส่ง **คำสั่งจริงไปบัญชี paper** ของ Alpaca (เริ่มที่ **BTC/USD**; XAUUSD เทรดบน Alpaca ไม่ได้)
+
+1. เปิด `ALPACA_TRADING_ENABLED=true` ใน `.env` แล้วรีสตาร์ท (ถ้าไม่เปิด = ดู/ค้นหาได้ แต่ส่ง order ไม่ได้)
+2. เปิด `http://localhost:3000/` → แผง **"เข้าไม้จริงบน Alpaca Paper"** (คอลัมน์ซ้าย)
+   - **ค้นหา asset:** พิมพ์ในช่องค้นหา (เช่น `BTC`) เลือกประเภท (Crypto / หุ้น-ETF) → คลิกเลือกตัวที่สนใจ
+   - **ระบบประเมินให้:** การ์ด recommendation บอกว่าควรเข้า Long/Short ไหม + ราคา/stop/target แนะนำ
+   - **อนุมัติ + ใส่ตัวเลข:** กรอกขนาด (มูลค่า `$` notional หรือจำนวนหน่วย), เลือก market/limit → กด **"อนุมัติ & ส่งคำสั่ง Paper"**
+3. ดูผลที่แผง **"บัญชี Alpaca จริง (Paper Account)"** — equity, positions, คำสั่งล่าสุด (refresh ทุก 15 วิ)
+
+endpoint ที่เกี่ยวข้อง:
+```text
+GET  /api/alpaca/assets?search=btc&class=crypto   # ค้นหา asset ที่เทรดได้
+GET  /api/dashboard/live-signals?symbol=BTC/USD   # recommendation จาก engine
+POST /api/dashboard/orders                         # ส่งคำสั่ง paper (DTO: symbol, side, type, notional|qty, limitPrice?)
+GET  /api/alpaca/orders                            # คำสั่งล่าสุด (monitor)
+GET  /api/alpaca/positions                         # position จริง
+```
+ตัวอย่างส่งคำสั่งซื้อ BTC มูลค่า $10:
+```bash
+curl -X POST http://localhost:3000/api/dashboard/orders \
+  -H "Content-Type: application/json" \
+  -d '{"symbol":"BTC/USD","side":"long","type":"market","notional":10}'
+```
+
+> ⚠️ ข้อจำกัด v1: crypto บน Alpaca **ไม่มี bracket order** — stop/target เป็นแค่ตัวเลขแนะนำ ระบบ**ยังไม่**ตั้ง stop-loss อัตโนมัติให้ ต้องปิดไม้เอง (จะทำ monitoring loop ใน Phase L5)
 
 **ความปลอดภัย by default:**
 - ไม่มี env → `configured:false`, ทุก endpoint Alpaca อื่นคืน 503 (ไม่ crash)
 - มี env แต่ไม่ตั้ง `ALPACA_LIVE=true` → ชี้ไปที่ **paper-api.alpaca.markets** เสมอ
-- ไม่มี `ALPACA_TRADING_ENABLED=true` → `submitBracketOrder()` โยน `TradingDisabledError` (อ่านบัญชี/positions ได้, ส่ง order ไม่ได้)
-- **ห้าม commit คีย์ลง repo** — เพิ่ม `.env` ใน `.gitignore`
+- ไม่มี `ALPACA_TRADING_ENABLED=true` → ส่ง order ไม่ได้ (อ่านบัญชี/positions/ราคา/ค้นหา asset ได้): `POST /api/dashboard/orders` คืน 403
+- Kill Switch (halt) → `POST /api/dashboard/orders` ถูกบล็อก (409) ทุกเส้นทาง
+- ทุกคำสั่งต้อง **ผู้ใช้อนุมัติด้วยมือ + กรอกตัวเลขเอง** เท่านั้น
+- **ห้าม commit คีย์ลง repo** — `.env` อยู่ใน `.gitignore` แล้ว
 
-> หมายเหตุ: ยังไม่มี HTTP endpoint ที่ submit order ออกไปจริง (กันยิงพลาด) — จะเปิดเมื่อ Phase L4 ผูก approve flow → broker เสร็จ ดู [GO_LIVE_PLAN.md](GO_LIVE_PLAN.md)
+> สถานะ: ส่วน **Phase L4** (ผูก approve flow → broker) ทำบางส่วนแล้วสำหรับ paper crypto ดูแผนเต็มที่ [GO_LIVE_PLAN.md](GO_LIVE_PLAN.md)
 
 ## 4) Backtest
 

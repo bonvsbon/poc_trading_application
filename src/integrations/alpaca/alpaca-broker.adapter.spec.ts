@@ -36,6 +36,8 @@ const orderResponse: AlpacaOrderResponse = {
 class StubClient implements AlpacaSdkClient {
   lastCreate?: AlpacaCreateOrderRequest;
   cancelled: string[] = [];
+  getOrders?: AlpacaSdkClient['getOrders'];
+  getAssets?: AlpacaSdkClient['getAssets'];
 
   constructor(private readonly opts: { failAccount?: boolean } = {}) {}
 
@@ -186,5 +188,98 @@ describe('AlpacaBrokerAdapter', () => {
     const adapter = new AlpacaBrokerAdapter(client, baseConfig);
     await adapter.cancelOrder('broker-123');
     expect(client.cancelled).toEqual(['broker-123']);
+  });
+
+  describe('simple orders (crypto-capable)', () => {
+    it('submits a crypto order with gtc tif and notional (no bracket)', async () => {
+      const client = new StubClient();
+      const adapter = new AlpacaBrokerAdapter(client, { ...baseConfig, tradingEnabled: true });
+      const result = await adapter.submitSimpleOrder({
+        clientOrderId: 'co-2',
+        symbol: 'BTC/USD',
+        side: 'long',
+        notional: 10,
+        type: 'market',
+      });
+      expect(result.brokerOrderId).toBe('broker-123');
+      expect(client.lastCreate).toMatchObject({
+        symbol: 'BTC/USD',
+        notional: 10,
+        side: 'buy',
+        type: 'market',
+        time_in_force: 'gtc',
+        order_class: 'simple',
+      });
+      expect(client.lastCreate?.qty).toBeUndefined();
+      expect(client.lastCreate?.stop_loss).toBeUndefined();
+    });
+
+    it('uses day tif and qty for equity simple orders', async () => {
+      const client = new StubClient();
+      const adapter = new AlpacaBrokerAdapter(client, { ...baseConfig, tradingEnabled: true });
+      await adapter.submitSimpleOrder({
+        clientOrderId: 'co-3',
+        symbol: 'AAPL',
+        side: 'long',
+        shares: 2,
+        type: 'market',
+      });
+      expect(client.lastCreate).toMatchObject({ symbol: 'AAPL', qty: 2, time_in_force: 'day', order_class: 'simple' });
+    });
+
+    it('rejects when both shares and notional are provided', async () => {
+      const adapter = new AlpacaBrokerAdapter(new StubClient(), { ...baseConfig, tradingEnabled: true });
+      await expect(
+        adapter.submitSimpleOrder({ clientOrderId: 'c', symbol: 'BTC/USD', side: 'long', shares: 1, notional: 10, type: 'market' }),
+      ).rejects.toThrow('exactly one');
+    });
+
+    it('blocks simple order when trading is disabled', async () => {
+      const adapter = new AlpacaBrokerAdapter(new StubClient(), baseConfig);
+      await expect(
+        adapter.submitSimpleOrder({ clientOrderId: 'c', symbol: 'BTC/USD', side: 'long', notional: 10, type: 'market' }),
+      ).rejects.toBeInstanceOf(TradingDisabledError);
+    });
+  });
+
+  describe('monitoring + asset search', () => {
+    it('returns [] from getOrders when the client lacks the endpoint', async () => {
+      const adapter = new AlpacaBrokerAdapter(new StubClient(), baseConfig);
+      expect(await adapter.getOrders()).toEqual([]);
+    });
+
+    it('maps orders for monitoring', async () => {
+      const client = new StubClient();
+      client.getOrders = async () => [
+        {
+          id: 'o1',
+          client_order_id: 'c1',
+          symbol: 'BTC/USD',
+          side: 'buy',
+          type: 'market',
+          qty: null,
+          notional: '10',
+          filled_qty: '0',
+          filled_avg_price: null,
+          status: 'accepted',
+          submitted_at: 't',
+        },
+      ];
+      const adapter = new AlpacaBrokerAdapter(client, baseConfig);
+      const orders = await adapter.getOrders();
+      expect(orders[0]).toMatchObject({ symbol: 'BTC/USD', side: 'long', notional: 10, filledQuantity: 0, quantity: null });
+    });
+
+    it('filters tradable assets by search term', async () => {
+      const client = new StubClient();
+      client.getAssets = async () => [
+        { id: '1', class: 'crypto', exchange: 'CRYPTO', symbol: 'BTC/USD', name: 'Bitcoin', status: 'active', tradable: true, fractionable: true },
+        { id: '2', class: 'crypto', exchange: 'CRYPTO', symbol: 'ETH/USD', name: 'Ether', status: 'active', tradable: true, fractionable: true },
+        { id: '3', class: 'crypto', exchange: 'CRYPTO', symbol: 'DOGE/USD', name: 'Dogecoin', status: 'active', tradable: false, fractionable: true },
+      ];
+      const adapter = new AlpacaBrokerAdapter(client, baseConfig);
+      const assets = await adapter.searchAssets({ search: 'bit', assetClass: 'crypto' });
+      expect(assets.map((a) => a.symbol)).toEqual(['BTC/USD']);
+    });
   });
 });

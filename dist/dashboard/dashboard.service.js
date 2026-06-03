@@ -8,15 +8,35 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardService = void 0;
 const common_1 = require("@nestjs/common");
+const node_crypto_1 = require("node:crypto");
+const alpaca_tokens_1 = require("../integrations/alpaca/alpaca.tokens");
 const clock_service_1 = require("./clock.service");
+const describeBrokerError = (error) => {
+    const body = error?.response?.data;
+    if (body) {
+        if (typeof body === 'string')
+            return body;
+        const typed = body;
+        if (typed.message) {
+            return typed.code ? `${typed.message} (code ${typed.code})` : typed.message;
+        }
+        return JSON.stringify(body);
+    }
+    return error instanceof Error ? error.message : 'unknown error';
+};
 let DashboardService = class DashboardService {
     clock;
+    broker;
     tradingHalted = false;
-    constructor(clock) {
+    constructor(clock, broker) {
         this.clock = clock;
+        this.broker = broker;
     }
     metrics = [
         { label: 'Equity', value: '$52,840.22', note: '+1.48% today', tone: 'positive' },
@@ -201,6 +221,57 @@ let DashboardService = class DashboardService {
         ];
         return this.getState();
     }
+    async placeOrder(dto) {
+        if (this.tradingHalted) {
+            throw new common_1.ConflictException('Trading is halted: cannot place orders');
+        }
+        if (!this.broker) {
+            throw new common_1.ServiceUnavailableException('Alpaca is not configured. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in env.');
+        }
+        const hasNotional = dto.notional !== undefined;
+        const hasQty = dto.qty !== undefined;
+        if (hasNotional === hasQty) {
+            throw new common_1.BadRequestException('Provide exactly one of notional or qty');
+        }
+        if (!this.broker.canTrade) {
+            throw new common_1.ForbiddenException('Trading is disabled. Set ALPACA_TRADING_ENABLED=true to place orders.');
+        }
+        let submitted;
+        try {
+            submitted = await this.broker.submitSimpleOrder({
+                clientOrderId: (0, node_crypto_1.randomUUID)(),
+                symbol: dto.symbol,
+                side: dto.side,
+                shares: dto.qty,
+                notional: dto.notional,
+                type: dto.type,
+                limitPrice: dto.limitPrice,
+            });
+        }
+        catch (error) {
+            throw new common_1.BadGatewayException(`Broker rejected order: ${describeBrokerError(error)}`);
+        }
+        const sizeLabel = hasNotional ? `$${dto.notional}` : `${dto.qty} units`;
+        this.orders = [
+            {
+                id: `ord-${submitted.brokerOrderId}`,
+                icon: 'pending',
+                title: `${dto.symbol} ${dto.side} order sent`,
+                detail: `${dto.type} · ${sizeLabel} · status ${submitted.status}`,
+                time: this.clock.marketTime(),
+            },
+            ...this.orders,
+        ];
+        this.journal = [
+            {
+                time: this.clock.shortTime(),
+                title: `Order submitted ${dto.symbol}`,
+                detail: `${dto.side} ${sizeLabel} (${dto.type}) → broker order ${submitted.brokerOrderId}`,
+            },
+            ...this.journal,
+        ];
+        return this.getState();
+    }
     resumeTrading() {
         this.tradingHalted = false;
         this.journal = [
@@ -228,6 +299,8 @@ let DashboardService = class DashboardService {
 exports.DashboardService = DashboardService;
 exports.DashboardService = DashboardService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [clock_service_1.ClockService])
+    __param(1, (0, common_1.Optional)()),
+    __param(1, (0, common_1.Inject)(alpaca_tokens_1.ALPACA_BROKER)),
+    __metadata("design:paramtypes", [clock_service_1.ClockService, Object])
 ], DashboardService);
 //# sourceMappingURL=dashboard.service.js.map

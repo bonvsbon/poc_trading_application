@@ -354,6 +354,390 @@ const loadDashboardState = async () => {
   }
 };
 
+const WATCHLIST_SYMBOLS = ["AAPL", "NVDA", "TSLA"];
+const lastPrices = {};
+
+const formatPrice = (price) =>
+  price === null || price === undefined
+    ? "—"
+    : new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(price);
+
+const setWatchlistStatus = (text, tone) => {
+  const pill = document.querySelector("#watchlistStatus");
+  const label = document.querySelector("#watchlistStatusText");
+  if (label) label.textContent = text;
+  if (pill) {
+    const dot = pill.querySelector(".status-dot");
+    if (dot) {
+      dot.classList.toggle("is-live", tone === "live");
+      dot.classList.toggle("is-warn", tone !== "live");
+    }
+  }
+};
+
+const setWatchlistNote = (message) => {
+  const note = document.querySelector("#watchlistNote");
+  if (!note) return;
+  note.textContent = message ?? "";
+  note.hidden = !message;
+};
+
+const renderWatchlist = (prices) => {
+  const container = document.querySelector("#watchlistRows");
+  if (!container || !Array.isArray(prices)) return;
+
+  container.innerHTML = prices
+    .map((row) => {
+      const prev = lastPrices[row.symbol];
+      let dir = "flat";
+      if (row.price !== null && prev !== undefined && prev !== null) {
+        if (row.price > prev) dir = "up";
+        else if (row.price < prev) dir = "down";
+      }
+      if (row.price !== null && row.price !== undefined) {
+        lastPrices[row.symbol] = row.price;
+      }
+      const arrow = dir === "up" ? "trending-up" : dir === "down" ? "trending-down" : "minus";
+      const time = row.timestamp
+        ? new Intl.DateTimeFormat("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+            timeZone: "America/New_York",
+          }).format(new Date(row.timestamp))
+        : "--:--:--";
+
+      return `
+        <div class="watch-row watch-${dir}">
+          <div class="watch-id">
+            <span class="watch-symbol">${escapeHtml(row.symbol)}</span>
+            <span class="watch-time">ET ${escapeHtml(time)}</span>
+          </div>
+          <span class="watch-price">${escapeHtml(formatPrice(row.price))}</span>
+          <span class="watch-dir">${createIcon(arrow)}</span>
+        </div>
+      `;
+    })
+    .join("");
+  renderIcons();
+};
+
+const renderWatchlistPlaceholder = () =>
+  renderWatchlist(WATCHLIST_SYMBOLS.map((symbol) => ({ symbol, price: null, timestamp: null })));
+
+const loadWatchlist = async () => {
+  try {
+    const response = await fetch(
+      `/api/alpaca/prices?symbols=${encodeURIComponent(WATCHLIST_SYMBOLS.join(","))}`,
+      { headers: { Accept: "application/json" } },
+    );
+
+    if (response.status === 503) {
+      setWatchlistStatus("ยังไม่ได้เชื่อม", "warn");
+      setWatchlistNote("ตั้งค่า ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY ใน .env แล้วรีสตาร์ท");
+      renderWatchlistPlaceholder();
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`Prices API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    renderWatchlist(data.prices);
+    setWatchlistStatus("เชื่อมแล้ว", "live");
+    setWatchlistNote("");
+  } catch (error) {
+    setWatchlistStatus("เชื่อมต่อไม่ได้", "warn");
+    setWatchlistNote("ดึงราคาไม่สำเร็จ — จะลองใหม่อัตโนมัติ");
+  }
+};
+
+// ── Paper trading: asset search + recommendation + order + monitor ──────────
+let tradeSymbol = "BTC/USD";
+let assetSearchTimer;
+
+const getJson = async (url) => {
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+  return { ok: response.ok, status: response.status, data };
+};
+
+const postJsonBody = async (url, body) => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+  return { ok: response.ok, status: response.status, data };
+};
+
+const setDot = (pillSelector, tone) => {
+  const dot = document.querySelector(`${pillSelector} .status-dot`);
+  if (!dot) return;
+  dot.classList.toggle("is-live", tone === "live");
+  dot.classList.toggle("is-warn", tone !== "live");
+};
+
+const setTradeStatus = (text, tone) => {
+  const label = document.querySelector("#tradeStatusText");
+  if (label) label.textContent = text;
+  setDot("#tradeStatus", tone);
+};
+
+const renderReco = (signal) => {
+  const box = document.querySelector("#recoBox");
+  if (!box) return;
+  const isLong = signal.side === "Long";
+  box.innerHTML = `
+    <div class="reco-head">
+      <span class="reco-action ${isLong ? "buy" : "sell"}">${escapeHtml(isLong ? "แนะนำเข้า Long" : "แนะนำเข้า Short")}</span>
+      <span class="reco-symbol">${escapeHtml(signal.symbol)}</span>
+      <span class="reco-confidence">conf ${escapeHtml(signal.confidence)}%</span>
+    </div>
+    <div class="reco-stats">
+      <span>ราคา<strong>${escapeHtml(signal.price)}</strong></span>
+      <span>R:R<strong>${escapeHtml(signal.riskReward)}</strong></span>
+      <span>Stop<strong>${escapeHtml(signal.stop)}</strong></span>
+      <span>Target<strong>${escapeHtml(signal.target)}</strong></span>
+    </div>
+    <p class="reco-thesis">${escapeHtml(signal.thesis)}</p>
+    <p class="reco-note">⚠️ stop/target เป็นคำแนะนำ — crypto บน Alpaca ไม่มี bracket อัตโนมัติ ต้องจัดการออกเอง</p>
+  `;
+  const symbolInput = document.querySelector("#orderSymbol");
+  const sideSelect = document.querySelector("#orderSide");
+  if (symbolInput) symbolInput.value = signal.symbol;
+  if (sideSelect) sideSelect.value = isLong ? "long" : "short";
+  renderIcons();
+};
+
+const loadRecommendation = async () => {
+  const box = document.querySelector("#recoBox");
+  if (!box) return;
+  const res = await getJson(`/api/dashboard/live-signals?symbol=${encodeURIComponent(tradeSymbol)}`);
+  if (!res.ok || !Array.isArray(res.data)) {
+    box.innerHTML = `<p class="reco-empty">ประเมินไม่ได้ตอนนี้</p>`;
+    return;
+  }
+  if (res.data.length === 0) {
+    box.innerHTML = `<p class="reco-empty">ยังไม่มีสัญญาณเข้าใน ${escapeHtml(tradeSymbol)} ตอนนี้ — รอจังหวะถัดไป</p>`;
+    return;
+  }
+  renderReco(res.data[0]);
+};
+
+const onAssetSearch = () => {
+  clearTimeout(assetSearchTimer);
+  assetSearchTimer = window.setTimeout(loadAssets, 300);
+};
+
+async function loadAssets() {
+  const input = document.querySelector("#assetSearchInput");
+  const results = document.querySelector("#assetResults");
+  if (!input || !results) return;
+  const term = input.value.trim();
+  const klass = document.querySelector("#assetClassSelect")?.value ?? "";
+  if (term.length < 1) {
+    results.hidden = true;
+    results.innerHTML = "";
+    return;
+  }
+  const res = await getJson(
+    `/api/alpaca/assets?search=${encodeURIComponent(term)}&class=${encodeURIComponent(klass)}`,
+  );
+  results.hidden = false;
+  if (res.status === 503) {
+    results.innerHTML = `<p class="asset-empty">ยังไม่ได้เชื่อม Alpaca — ตั้งค่า .env ก่อน</p>`;
+    return;
+  }
+  if (!res.ok || !Array.isArray(res.data)) {
+    results.innerHTML = `<p class="asset-empty">ค้นหาไม่สำเร็จ</p>`;
+    return;
+  }
+  if (res.data.length === 0) {
+    results.innerHTML = `<p class="asset-empty">ไม่พบสินทรัพย์</p>`;
+    return;
+  }
+  results.innerHTML = res.data
+    .map(
+      (a) => `
+        <button type="button" class="asset-item" data-symbol="${escapeHtml(a.symbol)}">
+          <span class="asset-sym">${escapeHtml(a.symbol)}</span>
+          <span class="asset-name">${escapeHtml(a.name)}</span>
+          <span class="asset-class">${escapeHtml(a.assetClass)}</span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+const onAssetPick = (event) => {
+  const button = event.target.closest(".asset-item");
+  if (!button) return;
+  tradeSymbol = button.dataset.symbol;
+  const symbolInput = document.querySelector("#orderSymbol");
+  const searchInput = document.querySelector("#assetSearchInput");
+  const results = document.querySelector("#assetResults");
+  if (symbolInput) symbolInput.value = tradeSymbol;
+  if (searchInput) searchInput.value = tradeSymbol;
+  if (results) results.hidden = true;
+  loadRecommendation();
+};
+
+const onSizeModeChange = () => {
+  const mode = document.querySelector("#orderSizeMode")?.value;
+  const label = document.querySelector("#orderAmountLabel");
+  if (label) label.textContent = mode === "qty" ? "จำนวนหน่วย" : "จำนวนเงิน ($)";
+};
+
+const onOrderTypeChange = () => {
+  const type = document.querySelector("#orderType")?.value;
+  const field = document.querySelector("#limitPriceField");
+  if (field) field.hidden = type !== "limit";
+};
+
+async function submitOrder(event) {
+  event.preventDefault();
+  const symbol = document.querySelector("#orderSymbol")?.value.trim();
+  const side = document.querySelector("#orderSide")?.value;
+  const type = document.querySelector("#orderType")?.value;
+  const sizeMode = document.querySelector("#orderSizeMode")?.value;
+  const amount = Number(document.querySelector("#orderAmount")?.value);
+  const limitPrice = Number(document.querySelector("#orderLimitPrice")?.value);
+
+  if (!amount || amount <= 0) {
+    showNotice("กรอกขนาดคำสั่งให้มากกว่า 0", "warn");
+    return;
+  }
+  if (type === "limit" && (!limitPrice || limitPrice <= 0)) {
+    showNotice("คำสั่ง Limit ต้องระบุราคา", "warn");
+    return;
+  }
+
+  const body = { symbol, side, type };
+  if (sizeMode === "qty") body.qty = amount;
+  else body.notional = amount;
+  if (type === "limit") body.limitPrice = limitPrice;
+
+  const button = document.querySelector("#submitOrderBtn");
+  if (button) button.disabled = true;
+  try {
+    const res = await postJsonBody("/api/dashboard/orders", body);
+    if (!res.ok) {
+      const message = res.data?.message ?? `ส่งคำสั่งไม่สำเร็จ (${res.status})`;
+      showNotice(Array.isArray(message) ? message.join(", ") : message, "warn");
+      return;
+    }
+    renderState(res.data);
+    showNotice(`ส่งคำสั่ง ${symbol} แล้ว (paper)`);
+    loadPaperAccount();
+  } catch (error) {
+    showNotice(error.message || "เกิดข้อผิดพลาด", "warn");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function loadPaperAccount() {
+  const statusText = document.querySelector("#paperAccountStatusText");
+  const metrics = document.querySelector("#paperMetrics");
+  const positionsEl = document.querySelector("#paperPositions");
+  const ordersEl = document.querySelector("#paperOrders");
+  if (!metrics || !positionsEl || !ordersEl) return;
+
+  const status = await getJson("/api/alpaca/status");
+  const configured = status.ok && status.data?.configured;
+
+  if (!configured) {
+    setDot("#paperAccountStatus", "warn");
+    if (statusText) statusText.textContent = "ยังไม่เชื่อม";
+    setTradeStatus("ยังไม่เชื่อม Alpaca", "warn");
+    metrics.innerHTML = `<p class="paper-empty">ตั้งค่า ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY ใน .env</p>`;
+    positionsEl.innerHTML = `<p class="paper-empty">—</p>`;
+    ordersEl.innerHTML = `<p class="paper-empty">—</p>`;
+    return;
+  }
+
+  setDot("#paperAccountStatus", "live");
+  if (statusText) statusText.textContent = status.data.paper ? "Paper" : "LIVE";
+  setTradeStatus(
+    status.data.tradingEnabled ? "เทรดได้ (paper)" : "ดูอย่างเดียว — ตั้ง ALPACA_TRADING_ENABLED=true",
+    status.data.tradingEnabled ? "live" : "warn",
+  );
+
+  const [account, positions, orders] = await Promise.all([
+    getJson("/api/alpaca/account"),
+    getJson("/api/alpaca/positions"),
+    getJson("/api/alpaca/orders"),
+  ]);
+
+  if (account.ok && account.data) {
+    metrics.innerHTML = `
+      <div class="paper-metric"><span>Equity</span><strong>${escapeHtml(formatPrice(account.data.equity))}</strong></div>
+      <div class="paper-metric"><span>Cash</span><strong>${escapeHtml(formatPrice(account.data.cash))}</strong></div>
+      <div class="paper-metric"><span>Buying Power</span><strong>${escapeHtml(formatPrice(account.data.buyingPower))}</strong></div>
+    `;
+  }
+
+  if (positions.ok && Array.isArray(positions.data)) {
+    positionsEl.innerHTML = positions.data.length
+      ? positions.data
+          .map(
+            (p) => `
+              <div class="paper-row">
+                <span class="paper-sym">${escapeHtml(p.symbol)}</span>
+                <span>${escapeHtml(p.shares)} @ ${escapeHtml(formatPrice(p.averageEntryPrice))}</span>
+                <span class="${p.unrealizedPnl >= 0 ? "positive" : "negative"}">${escapeHtml(formatPrice(p.unrealizedPnl))}</span>
+              </div>`,
+          )
+          .join("")
+      : `<p class="paper-empty">ไม่มี position</p>`;
+  }
+
+  if (orders.ok && Array.isArray(orders.data)) {
+    ordersEl.innerHTML = orders.data.length
+      ? orders.data
+          .slice(0, 6)
+          .map(
+            (o) => `
+              <div class="paper-row">
+                <span class="paper-sym">${escapeHtml(o.symbol)}</span>
+                <span>${escapeHtml(o.side)} ${escapeHtml(o.filledQuantity ?? o.quantity ?? "")}</span>
+                <span class="paper-ostatus">${escapeHtml(o.status)}</span>
+              </div>`,
+          )
+          .join("")
+      : `<p class="paper-empty">ยังไม่มีคำสั่ง</p>`;
+  }
+}
+
+const initPaperTrading = () => {
+  document.querySelector("#orderForm")?.addEventListener("submit", submitOrder);
+  document.querySelector("#assetSearchInput")?.addEventListener("input", onAssetSearch);
+  document.querySelector("#assetClassSelect")?.addEventListener("change", loadAssets);
+  document.querySelector("#assetResults")?.addEventListener("click", onAssetPick);
+  document.querySelector("#orderSizeMode")?.addEventListener("change", onSizeModeChange);
+  document.querySelector("#orderType")?.addEventListener("change", onOrderTypeChange);
+  loadRecommendation();
+  loadPaperAccount();
+  window.setInterval(loadRecommendation, 20000);
+  window.setInterval(loadPaperAccount, 15000);
+};
+
 const showNotice = (message, tone = "info") => {
   const notice = document.querySelector("#notice");
   if (!notice) return;
@@ -436,11 +820,15 @@ const wireActions = () => {
 document.addEventListener("DOMContentLoaded", () => {
   updateClocks();
   loadDashboardState();
+  renderWatchlistPlaceholder();
+  loadWatchlist();
+  initPaperTrading();
   wireActions();
   refreshKillSwitchUi();
 
   window.setInterval(updateClocks, 1000);
   window.setInterval(loadDashboardState, 15000);
+  window.setInterval(loadWatchlist, 5000);
 
   renderIcons();
 });

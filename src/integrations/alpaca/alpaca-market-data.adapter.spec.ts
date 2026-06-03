@@ -1,5 +1,10 @@
 import { AlpacaMarketDataAdapter } from './alpaca-market-data.adapter';
-import { AlpacaBarResponse, AlpacaBarsOptions, AlpacaSdkClient } from './alpaca-client';
+import {
+  AlpacaBarResponse,
+  AlpacaBarsOptions,
+  AlpacaLatestTradeResponse,
+  AlpacaSdkClient,
+} from './alpaca-client';
 
 const bar = (over: Partial<AlpacaBarResponse> = {}): AlpacaBarResponse => ({
   Timestamp: '2026-06-02T13:30:00Z',
@@ -62,5 +67,107 @@ describe('AlpacaMarketDataAdapter', () => {
     const adapter = new AlpacaMarketDataAdapter(clientWithBars([bar()]));
     const bars = await adapter.recentBars('NVDA');
     expect(bars).toHaveLength(1);
+  });
+
+  describe('latest prices', () => {
+    it('latestPrice maps a single trade into LatestPrice', async () => {
+      const client = clientWithBars([bar()]);
+      client.getLatestTrades = async (symbols: string[]) =>
+        new Map<string, AlpacaLatestTradeResponse>(
+          symbols.map((s) => [s, { Symbol: s, Timestamp: '2026-06-02T13:30:05Z', Price: 123.45, Size: 10 }]),
+        );
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const result = await adapter.latestPrice('AAPL');
+      expect(result).toEqual({
+        symbol: 'AAPL',
+        price: 123.45,
+        timestamp: '2026-06-02T13:30:05Z',
+      });
+    });
+
+    it('latestPrices uses the batch endpoint and preserves request order', async () => {
+      const client = clientWithBars([bar()]);
+      client.getLatestTrades = async (symbols: string[]) => {
+        const prices: Record<string, number> = { AAPL: 200, NVDA: 1100, TSLA: 250 };
+        const map = new Map<string, AlpacaLatestTradeResponse>();
+        for (const symbol of symbols) {
+          map.set(symbol, { Symbol: symbol, Timestamp: '2026-06-02T13:30:05Z', Price: prices[symbol] });
+        }
+        return map;
+      };
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const result = await adapter.latestPrices(['NVDA', 'AAPL', 'TSLA']);
+      expect(result.map((p) => p.symbol)).toEqual(['NVDA', 'AAPL', 'TSLA']);
+      expect(result.map((p) => p.price)).toEqual([1100, 200, 250]);
+    });
+
+    it('latestPrices returns null price for symbols missing from the feed', async () => {
+      const client = clientWithBars([bar()]);
+      client.getLatestTrades = async () =>
+        new Map<string, AlpacaLatestTradeResponse>([
+          ['AAPL', { Symbol: 'AAPL', Timestamp: '2026-06-02T13:30:05Z', Price: 200 }],
+        ]);
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const result = await adapter.latestPrices(['AAPL', 'ZZZZ']);
+      expect(result[1]).toEqual({ symbol: 'ZZZZ', price: null, timestamp: null });
+    });
+
+    it('routes crypto symbols to the crypto trade endpoint', async () => {
+      const client = clientWithBars([bar()]);
+      let equityCalled = false;
+      client.getLatestTrades = async (symbols: string[]) => {
+        equityCalled = true;
+        return new Map<string, AlpacaLatestTradeResponse>(
+          symbols.map((s) => [s, { Symbol: s, Timestamp: '2026-06-02T13:30:05Z', Price: 200 }]),
+        );
+      };
+      client.getLatestCryptoTrades = async (symbols: string[]) =>
+        new Map<string, AlpacaLatestTradeResponse>(
+          symbols.map((s) => [s, { Symbol: s, Timestamp: '2026-06-02T13:30:05Z', Price: 65000 }]),
+        );
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const result = await adapter.latestPrices(['BTC/USD', 'AAPL']);
+      expect(result.find((p) => p.symbol === 'BTC/USD')?.price).toBe(65000);
+      expect(result.find((p) => p.symbol === 'AAPL')?.price).toBe(200);
+      expect(equityCalled).toBe(true);
+    });
+
+    it('does not call any equity endpoint when only crypto is requested', async () => {
+      const client = clientWithBars([bar()]);
+      client.getLatestTrades = async () => {
+        throw new Error('equity endpoint must not be called for crypto-only');
+      };
+      client.getLatestCryptoTrades = async (symbols: string[]) =>
+        new Map<string, AlpacaLatestTradeResponse>(
+          symbols.map((s) => [s, { Symbol: s, Timestamp: '2026-06-02T13:30:05Z', Price: 65000 }]),
+        );
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const result = await adapter.latestPrices(['BTC/USD']);
+      expect(result[0].price).toBe(65000);
+    });
+
+    it('latestPrice throws when the client cannot fetch trades', async () => {
+      const adapter = new AlpacaMarketDataAdapter(clientWithBars([bar()]));
+      await expect(adapter.latestPrice('AAPL')).rejects.toThrow('latest-trade');
+    });
+  });
+
+  describe('crypto bars', () => {
+    it('maps crypto bars (Open/High/Low/Close) into engine Bar objects', async () => {
+      const client = clientWithBars([bar()]);
+      client.getCryptoBars = async (symbols: string[]) =>
+        new Map([
+          [
+            symbols[0],
+            [
+              { Timestamp: '2026-06-02T13:30:00Z', Open: 65000, High: 65100, Low: 64900, Close: 65050, Volume: 12 },
+            ],
+          ],
+        ]);
+      const adapter = new AlpacaMarketDataAdapter(client);
+      const bars = await adapter.recentBars('BTC/USD');
+      expect(bars).toHaveLength(1);
+      expect(bars[0]).toMatchObject({ symbol: 'BTC/USD', open: 65000, close: 65050, volume: 12 });
+    });
   });
 });

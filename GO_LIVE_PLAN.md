@@ -12,8 +12,12 @@
 
 ## ส่วนที่ 1 — แผน Go-Live (แบ่งเป็น Phase L)
 
-> สถานะ: **L1/L2 ทำโครงไว้แล้ว** (Alpaca adapter + ports + AlpacaModule, paper-safe by default)
-> เหลือ L3–L7 ก่อนจะใช้เงินจริงได้
+> สถานะ: **L1/L2 ทำแล้ว + L4 บางส่วน** — Alpaca adapter + ports + AlpacaModule (paper-safe by default),
+> ดึงราคา/บาร์จริง (หุ้น + crypto), ค้นหา asset, และ **ส่งคำสั่ง paper จริงสำหรับ BTC/USD** ผ่าน
+> `POST /api/dashboard/orders` (ประเมิน → อนุมัติ+ใส่ตัวเลข → ส่ง → monitor) โดยมี gate: halt + `ALPACA_TRADING_ENABLED`
+> เหลือ L3, L4 (auth + persistence ของ order/audit), L5–L7 ก่อนจะใช้เงินจริงได้
+>
+> ⚠️ v1 ของการเทรด: crypto ไม่มี bracket → ยังไม่มี stop-loss อัตโนมัติฝั่ง server (ต้องปิดไม้เอง จนกว่าจะทำ L5 runtime loop)
 
 ### Phase L1 — Data layer (ข้อมูลจริง)
 - นิยาม port กลาง `MarketDataPort` (ต่อยอดจาก `MarketDataProvider` ปัจจุบัน)

@@ -100,3 +100,4 @@ out/
 .yarn/unplugged
 .yarn/install-state.gz
 .pnp.*
+node_modules

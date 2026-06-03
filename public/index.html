@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Live Trading Control Center</title>
     <link rel="preconnect" href="https://unpkg.com" />
-    <link rel="stylesheet" href="./styles.css?v=20260602-audit" />
+    <link rel="stylesheet" href="./styles.css?v=20260603-paper" />
   </head>
   <body>
     <div class="app-shell">
@@ -160,6 +160,85 @@
 
         <div class="dashboard-grid">
           <div class="grid-col grid-col--main">
+            <section class="panel paper-trade-panel" id="paper-trade">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Paper Trading</p>
+                  <h2>เข้าไม้จริงบน Alpaca Paper</h2>
+                </div>
+                <span class="health-pill" id="tradeStatus">
+                  <span class="status-dot is-warn"></span>
+                  <span id="tradeStatusText">ตรวจสถานะ…</span>
+                </span>
+              </div>
+
+              <div class="asset-search">
+                <input
+                  type="search"
+                  id="assetSearchInput"
+                  placeholder="ค้นหาสินทรัพย์ที่เทรดได้ เช่น BTC, ETH, AAPL"
+                  autocomplete="off"
+                />
+                <select id="assetClassSelect" aria-label="ประเภทสินทรัพย์">
+                  <option value="crypto">Crypto</option>
+                  <option value="us_equity">หุ้น/ETF</option>
+                  <option value="">ทั้งหมด</option>
+                </select>
+              </div>
+              <div class="asset-results" id="assetResults" hidden></div>
+
+              <div class="reco" id="recoBox">
+                <p class="reco-empty">เลือกสินทรัพย์เพื่อให้ระบบประเมินว่าควรเข้าไหม</p>
+              </div>
+
+              <form class="order-form" id="orderForm" autocomplete="off">
+                <div class="order-row">
+                  <label
+                    >สินทรัพย์
+                    <input type="text" id="orderSymbol" value="BTC/USD" readonly />
+                  </label>
+                  <label
+                    >ฝั่ง
+                    <select id="orderSide">
+                      <option value="long">Long (ซื้อ)</option>
+                      <option value="short">Short (ขาย)</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="order-row">
+                  <label
+                    >วิธีระบุขนาด
+                    <select id="orderSizeMode">
+                      <option value="notional">มูลค่าเงิน $ (notional)</option>
+                      <option value="qty">จำนวนหน่วย (qty)</option>
+                    </select>
+                  </label>
+                  <label
+                    ><span id="orderAmountLabel">จำนวนเงิน ($)</span>
+                    <input type="number" id="orderAmount" min="0" step="any" placeholder="เช่น 10" />
+                  </label>
+                </div>
+                <div class="order-row">
+                  <label
+                    >ชนิดคำสั่ง
+                    <select id="orderType">
+                      <option value="market">Market (ราคาตลาด)</option>
+                      <option value="limit">Limit (ตั้งราคา)</option>
+                    </select>
+                  </label>
+                  <label id="limitPriceField" hidden
+                    >ราคา limit ($)
+                    <input type="number" id="orderLimitPrice" min="0" step="any" />
+                  </label>
+                </div>
+                <button type="submit" class="approve-button" id="submitOrderBtn">
+                  <i data-lucide="send"></i>
+                  <span>อนุมัติ &amp; ส่งคำสั่ง Paper</span>
+                </button>
+                <p class="order-hint" id="orderHint"></p>
+              </form>
+            </section>
+
             <section class="panel signal-panel" id="signals">
               <div class="panel-header">
                 <div>
@@ -319,6 +398,49 @@
           </div>
 
           <div class="grid-col grid-col--side">
+            <section class="panel watchlist-panel" id="watchlist">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Live Prices</p>
+                  <h2>ราคาเรียลไทม์</h2>
+                </div>
+                <span class="health-pill" id="watchlistStatus">
+                  <span class="status-dot is-warn"></span>
+                  <span id="watchlistStatusText">กำลังเชื่อม…</span>
+                </span>
+              </div>
+              <div class="watchlist" id="watchlistRows">
+                <!-- เติมโดย app.js -->
+              </div>
+              <p class="watchlist-note" id="watchlistNote" hidden></p>
+            </section>
+
+            <section class="panel paper-account-panel" id="paper-account">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Paper Account</p>
+                  <h2>บัญชี Alpaca จริง</h2>
+                </div>
+                <span class="health-pill" id="paperAccountStatus">
+                  <span class="status-dot is-warn"></span>
+                  <span id="paperAccountStatusText">—</span>
+                </span>
+              </div>
+              <div class="paper-metrics" id="paperMetrics"></div>
+              <div class="paper-section">
+                <h3>Positions</h3>
+                <div class="paper-positions" id="paperPositions">
+                  <p class="paper-empty">—</p>
+                </div>
+              </div>
+              <div class="paper-section">
+                <h3>คำสั่งล่าสุด</h3>
+                <div class="paper-orders" id="paperOrders">
+                  <p class="paper-empty">—</p>
+                </div>
+              </div>
+            </section>
+
             <section class="panel risk-panel" id="risk">
               <div class="panel-header">
                 <div>
@@ -456,6 +578,6 @@
     </div>
 
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="./app.js?v=20260602-audit"></script>
+    <script src="./app.js?v=20260603-paper"></script>
   </body>
 </html>

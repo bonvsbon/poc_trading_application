@@ -74,6 +74,43 @@ describe('Dashboard (e2e)', () => {
     await request(app.getHttpServer()).get('/api/alpaca/account').expect(503);
   });
 
+  it('GET /api/alpaca/prices returns 503 when Alpaca is not configured', async () => {
+    await request(app.getHttpServer())
+      .get('/api/alpaca/prices?symbols=AAPL,NVDA,TSLA')
+      .expect(503);
+  });
+
+  it('GET /api/alpaca/assets returns 503 when Alpaca is not configured', async () => {
+    await request(app.getHttpServer())
+      .get('/api/alpaca/assets?search=btc&class=crypto')
+      .expect(503);
+  });
+
+  it('GET /api/alpaca/orders returns 503 when Alpaca is not configured', async () => {
+    await request(app.getHttpServer()).get('/api/alpaca/orders').expect(503);
+  });
+
+  it('POST /api/dashboard/orders returns 503 when broker is not configured', async () => {
+    await request(app.getHttpServer())
+      .post('/api/dashboard/orders')
+      .send({ symbol: 'BTC/USD', side: 'long', type: 'market', notional: 10 })
+      .expect(503);
+  });
+
+  it('POST /api/dashboard/orders rejects an invalid body with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/api/dashboard/orders')
+      .send({ symbol: 'BTC/USD', side: 'sideways', type: 'market', notional: 10 })
+      .expect(400);
+  });
+
+  it('POST /api/dashboard/orders rejects a limit order without limitPrice with 400', async () => {
+    await request(app.getHttpServer())
+      .post('/api/dashboard/orders')
+      .send({ symbol: 'BTC/USD', side: 'long', type: 'limit', notional: 10 })
+      .expect(400);
+  });
+
   it('GET /api/dashboard/live-signals returns engine-derived signals', async () => {
     const res = await request(app.getHttpServer()).get('/api/dashboard/live-signals').expect(200);
     expect(Array.isArray(res.body)).toBe(true);

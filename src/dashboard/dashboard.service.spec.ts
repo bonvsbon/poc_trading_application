@@ -1,4 +1,11 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { BrokerOrder, BrokerPort, SubmitSimpleOrder, SubmittedOrder } from '../engine/ports/broker.port';
 import { ClockService } from './clock.service';
 import { DashboardService } from './dashboard.service';
 
@@ -14,11 +21,30 @@ class FixedClock extends ClockService {
   }
 }
 
+const fakeBroker = (
+  over: Partial<BrokerPort> & { canTrade?: boolean } = {},
+): BrokerPort => ({
+  canTrade: over.canTrade ?? true,
+  getAccount: async () => ({ accountId: '', equity: 0, cash: 0, buyingPower: 0, currency: 'USD', tradingBlocked: false }),
+  getPositions: async () => [],
+  submitBracketOrder: async () => ({ brokerOrderId: '', clientOrderId: '', status: '', submittedAt: '' }) as SubmittedOrder,
+  submitSimpleOrder: async (o: SubmitSimpleOrder): Promise<SubmittedOrder> => ({
+    brokerOrderId: 'broker-1',
+    clientOrderId: o.clientOrderId,
+    status: 'accepted',
+    submittedAt: '2026-05-29T00:00:00.000Z',
+  }),
+  getOrders: async (): Promise<BrokerOrder[]> => [],
+  searchAssets: async () => [],
+  cancelOrder: async () => undefined,
+  ...over,
+});
+
 describe('DashboardService', () => {
   let service: DashboardService;
 
   beforeEach(() => {
-    service = new DashboardService(new FixedClock());
+    service = new DashboardService(new FixedClock(), null);
   });
 
   it('returns a live summary by default', () => {
@@ -123,5 +149,48 @@ describe('DashboardService', () => {
     const state = service.haltTrading();
     expect(state.journal[0].title).toBe('Kill Switch activated');
     expect(state.summary.nextAction).toContain('portfolio');
+  });
+
+  describe('placeOrder (real paper order)', () => {
+    const dto = { symbol: 'BTC/USD', side: 'long' as const, type: 'market' as const, notional: 10 };
+
+    it('returns 503 when no broker is configured', async () => {
+      await expect(service.placeOrder(dto)).rejects.toThrow(ServiceUnavailableException);
+    });
+
+    it('is blocked while trading is halted', async () => {
+      const withBroker = new DashboardService(new FixedClock(), fakeBroker());
+      withBroker.haltTrading();
+      await expect(withBroker.placeOrder(dto)).rejects.toThrow(ConflictException);
+    });
+
+    it('is forbidden when trading is not enabled at the broker', async () => {
+      const withBroker = new DashboardService(new FixedClock(), fakeBroker({ canTrade: false }));
+      await expect(withBroker.placeOrder(dto)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects when both notional and qty are provided', async () => {
+      const withBroker = new DashboardService(new FixedClock(), fakeBroker());
+      await expect(
+        withBroker.placeOrder({ ...dto, qty: 1 }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('submits a real order and records an order + journal entry', async () => {
+      let received: SubmitSimpleOrder | undefined;
+      const broker = fakeBroker({
+        submitSimpleOrder: async (o) => {
+          received = o;
+          return { brokerOrderId: 'broker-1', clientOrderId: o.clientOrderId, status: 'accepted', submittedAt: '2026-05-29T00:00:00.000Z' };
+        },
+      });
+      const withBroker = new DashboardService(new FixedClock(), broker);
+      const state = await withBroker.placeOrder(dto);
+
+      expect(received).toMatchObject({ symbol: 'BTC/USD', side: 'long', notional: 10, type: 'market' });
+      expect(received?.clientOrderId).toBeTruthy();
+      expect(state.orders[0].title).toContain('BTC/USD');
+      expect(state.journal[0].title).toContain('Order submitted BTC/USD');
+    });
   });
 });

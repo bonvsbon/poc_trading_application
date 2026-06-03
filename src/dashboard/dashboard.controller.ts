@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
+import { PlaceOrderDto } from './place-order.dto';
 import { EngineSignalService } from './engine-signal.service';
 
 @Controller('dashboard')
@@ -15,8 +16,8 @@ export class DashboardController {
   }
 
   @Get('live-signals')
-  getLiveSignals() {
-    return this.engineSignals.liveSignals();
+  getLiveSignals(@Query('symbol') symbol?: string) {
+    return this.engineSignals.liveSignals(symbol || undefined);
   }
 
   @Get('state')
@@ -47,5 +48,14 @@ export class DashboardController {
   @Post('close-all')
   closeAll() {
     return this.dashboardService.closeAll();
+  }
+
+  /**
+   * Submit a REAL paper order to the broker after the user reviewed the
+   * recommendation and entered the size. Gated by Kill Switch + ALPACA_TRADING_ENABLED.
+   */
+  @Post('orders')
+  placeOrder(@Body() dto: PlaceOrderDto) {
+    return this.dashboardService.placeOrder(dto);
   }
 }

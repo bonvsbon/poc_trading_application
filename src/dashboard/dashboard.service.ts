@@ -1,5 +1,19 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { BrokerPort } from '../engine/ports/broker.port';
+import { ALPACA_BROKER } from '../integrations/alpaca/alpaca.tokens';
 import { ClockService } from './clock.service';
+import { PlaceOrderDto } from './place-order.dto';
 import {
   DashboardMetric,
   DashboardState,
@@ -12,11 +26,31 @@ import {
   TradingSignal,
 } from './dashboard.types';
 
+/**
+ * Pull the real reason out of an Alpaca/axios error. The SDK surfaces HTTP
+ * failures as axios errors whose `response.data` holds Alpaca's `{ code, message }`.
+ */
+const describeBrokerError = (error: unknown): string => {
+  const body = (error as { response?: { data?: unknown } })?.response?.data;
+  if (body) {
+    if (typeof body === 'string') return body;
+    const typed = body as { message?: string; code?: number };
+    if (typed.message) {
+      return typed.code ? `${typed.message} (code ${typed.code})` : typed.message;
+    }
+    return JSON.stringify(body);
+  }
+  return error instanceof Error ? error.message : 'unknown error';
+};
+
 @Injectable()
 export class DashboardService {
   private tradingHalted = false;
 
-  constructor(private readonly clock: ClockService) {}
+  constructor(
+    private readonly clock: ClockService,
+    @Optional() @Inject(ALPACA_BROKER) private readonly broker: BrokerPort | null,
+  ) {}
 
   private readonly metrics: DashboardMetric[] = [
     { label: 'Equity', value: '$52,840.22', note: '+1.48% today', tone: 'positive' },
@@ -220,6 +254,68 @@ export class DashboardService {
         time: this.clock.shortTime(),
         title: 'Close All triggered',
         detail: `ยกเลิก ${pendingCount} pending signal · ปิด ${positionsClosed} position`,
+      },
+      ...this.journal,
+    ];
+
+    return this.getState();
+  }
+
+  /**
+   * Submit a REAL paper order to the broker. Safety gates, in order:
+   * Kill Switch (halt) → broker configured → valid size → trading enabled.
+   */
+  async placeOrder(dto: PlaceOrderDto): Promise<DashboardState> {
+    if (this.tradingHalted) {
+      throw new ConflictException('Trading is halted: cannot place orders');
+    }
+    if (!this.broker) {
+      throw new ServiceUnavailableException(
+        'Alpaca is not configured. Set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY in env.',
+      );
+    }
+    const hasNotional = dto.notional !== undefined;
+    const hasQty = dto.qty !== undefined;
+    if (hasNotional === hasQty) {
+      throw new BadRequestException('Provide exactly one of notional or qty');
+    }
+    if (!this.broker.canTrade) {
+      throw new ForbiddenException(
+        'Trading is disabled. Set ALPACA_TRADING_ENABLED=true to place orders.',
+      );
+    }
+
+    let submitted;
+    try {
+      submitted = await this.broker.submitSimpleOrder({
+        clientOrderId: randomUUID(),
+        symbol: dto.symbol,
+        side: dto.side,
+        shares: dto.qty,
+        notional: dto.notional,
+        type: dto.type,
+        limitPrice: dto.limitPrice,
+      });
+    } catch (error) {
+      throw new BadGatewayException(`Broker rejected order: ${describeBrokerError(error)}`);
+    }
+
+    const sizeLabel = hasNotional ? `$${dto.notional}` : `${dto.qty} units`;
+    this.orders = [
+      {
+        id: `ord-${submitted.brokerOrderId}`,
+        icon: 'pending',
+        title: `${dto.symbol} ${dto.side} order sent`,
+        detail: `${dto.type} · ${sizeLabel} · status ${submitted.status}`,
+        time: this.clock.marketTime(),
+      },
+      ...this.orders,
+    ];
+    this.journal = [
+      {
+        time: this.clock.shortTime(),
+        title: `Order submitted ${dto.symbol}`,
+        detail: `${dto.side} ${sizeLabel} (${dto.type}) → broker order ${submitted.brokerOrderId}`,
       },
       ...this.journal,
     ];

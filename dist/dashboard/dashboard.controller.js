@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardController = void 0;
 const common_1 = require("@nestjs/common");
 const dashboard_service_1 = require("./dashboard.service");
+const place_order_dto_1 = require("./place-order.dto");
 const engine_signal_service_1 = require("./engine-signal.service");
 let DashboardController = class DashboardController {
     dashboardService;
@@ -26,8 +27,8 @@ let DashboardController = class DashboardController {
     getSummary() {
         return this.dashboardService.getSummary();
     }
-    getLiveSignals() {
-        return this.engineSignals.liveSignals();
+    getLiveSignals(symbol) {
+        return this.engineSignals.liveSignals(symbol || undefined);
     }
     getState() {
         return this.dashboardService.getState();
@@ -47,6 +48,9 @@ let DashboardController = class DashboardController {
     closeAll() {
         return this.dashboardService.closeAll();
     }
+    placeOrder(dto) {
+        return this.dashboardService.placeOrder(dto);
+    }
 };
 exports.DashboardController = DashboardController;
 __decorate([
@@ -57,8 +61,9 @@ __decorate([
 ], DashboardController.prototype, "getSummary", null);
 __decorate([
     (0, common_1.Get)('live-signals'),
+    __param(0, (0, common_1.Query)('symbol')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], DashboardController.prototype, "getLiveSignals", null);
 __decorate([
@@ -99,6 +104,13 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], DashboardController.prototype, "closeAll", null);
+__decorate([
+    (0, common_1.Post)('orders'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [place_order_dto_1.PlaceOrderDto]),
+    __metadata("design:returntype", void 0)
+], DashboardController.prototype, "placeOrder", null);
 exports.DashboardController = DashboardController = __decorate([
     (0, common_1.Controller)('dashboard'),
     __metadata("design:paramtypes", [dashboard_service_1.DashboardService,

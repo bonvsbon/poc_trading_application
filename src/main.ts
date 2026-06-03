@@ -1,3 +1,5 @@
+// Load .env into process.env before anything reads it (e.g. Alpaca config).
+import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';

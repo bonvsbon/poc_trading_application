@@ -7,7 +7,14 @@ export interface HistoricalBarsRequest {
     to: string;
     limit?: number;
 }
+export interface LatestPrice {
+    symbol: string;
+    price: number | null;
+    timestamp: string | null;
+}
 export interface MarketDataPort {
     recentBars(symbol: string): Promise<Bar[]> | Bar[];
     historicalBars?(request: HistoricalBarsRequest): Promise<Bar[]>;
+    latestPrice?(symbol: string): Promise<LatestPrice>;
+    latestPrices?(symbols: string[]): Promise<LatestPrice[]>;
 }
